@@ -132,8 +132,8 @@ app.get("/api/me",verifyToken,async(req, res) =>{
 app.post("/api/logout",verifyToken,async(req, res) =>{
   res.clearCookie("token",{
     httpOnly:true,
-    secure:false,
-    sameSite:"lax"
+    secure:true,
+    sameSite:"none"
   })
   res.status(200).json({message:"Logged out"})
   

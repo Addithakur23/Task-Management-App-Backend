@@ -3,7 +3,7 @@ import mongoose from "mongoose"
 import dotenv from "dotenv"
 import cors from "cors"
 import { User } from "./models/User.js"
-import { Tasks } from "./models/Task.js"
+import { Tasks } from "./models/Tasks.js"
 import bcrypt from "bcrypt"
 import jwt from "jsonwebtoken"
 import verifyToken from "./middleware/authmiddleware.js"
@@ -16,6 +16,7 @@ app.use(express.json())
 app.use(cors({origin:"https://task-management-app-smoky-five.vercel.app",credentials:true}))
 app.use(cookieParser())
 dotenv.config()
+console.log("mongodb connection string ",process.env.MONGO_URI)
 await mongoose.connect(process.env.MONGO_URI)
 
 app.post('/api/Signup', async(req, res) => {
@@ -52,17 +53,31 @@ app.post('/api/Login', async(req, res) => {
   if(!user){
     return res.status(401).json({message:"Invalid Credentials"})
   }
+ 
   let isMatch=await bcrypt.compare(Password,user.Password)
   console.log(isMatch)
   if(!isMatch){
     return res.status(401).json({message:"Invalid Credentials"})
   }
-  const token=jwt.sign({id:user._id,role:user.role},process.env.JWT_SECRET,{expiresIn:"1d"})
-  res.cookie("token",token,{
-    httpOnly:true,
-    secure:process.env.NODE_ENV=="Production",
-    sameSite:"none"
-  })
+  const isProduction = process.env.NODE_ENV === "production";
+const token = jwt.sign(
+  {
+    id: user._id,
+    role: user.role
+  },
+  process.env.JWT_SECRET,
+  {
+    expiresIn: "1d"
+  }
+);
+
+res.cookie("token", token, {
+  httpOnly: true,
+  secure: isProduction,
+  sameSite: isProduction ? "none" : "lax",
+  maxAge: 24 * 60 * 60 * 1000
+});
+console.log("token",token)
   return res.status(200).json({success:true})
 
 }
@@ -72,12 +87,36 @@ app.post('/api/Login', async(req, res) => {
   
 })
 
-
-//for notes
 app.get('/api/tasks',verifyToken, async(req, res) =>{
-  const data=await Tasks.find({user:req.id})
-  console.log(data)
-  res.json(data)
+//   const data=await Tasks.find({user:req.id})
+//   console.log(data)
+//  return res.status(200).json({
+//   success: true,
+//  data
+// });
+  try {
+    const { status } = req.query;
+
+    let filter = {};
+
+    if (status && status !== "All") {
+      filter.Status = status;
+    }
+
+    const tasks = await Tasks.find(filter);
+
+    return res.status(200).json({
+      success: true,
+      tasks
+    });
+
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+
 })
 
 app.post('/api/tasks',verifyToken, async(req, res) =>{
@@ -118,16 +157,32 @@ res.json(updateTask)
 })
 
 
-app.get("/api/me",verifyToken,async(req, res) =>{
- try{ const user=await User.findById(req.id).select("-Password")
-  if(!user){
-    res.status(404).json({message:"User not found"})
+app.get("/api/me", verifyToken, async (req, res) => {
+  try {
+    console.log(req.id)
+    const user = await User.findById(req.id).select("-Password");
+
+    console.log("me", user);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      user
+    });
+
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: err.message
+    });
   }
-  res.status(200).json(user)}
-  catch(err){
-    res.status(500).json({message:err.message})
-  }
-})
+});
 
 app.post("/api/logout",verifyToken,async(req, res) =>{
   res.clearCookie("token",{

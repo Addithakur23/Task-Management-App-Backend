@@ -59,7 +59,7 @@ app.post('/api/Login', async(req, res) => {
   if(!isMatch){
     return res.status(401).json({message:"Invalid Credentials"})
   }
-  const isProduction = process.env.NODE_ENV === "production";
+  const isProduction = process.env.NODE_ENV === "Production";
 const token = jwt.sign(
   {
     id: user._id,
